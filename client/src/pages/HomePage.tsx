@@ -299,6 +299,7 @@ export default function HomePage() {
       {previewItems && (
         <ItemPreviewModal
           items={previewItems}
+          lists={lists}
           onConfirm={handleConfirm}
           onCancel={() => setPreviewItems(null)}
         />
