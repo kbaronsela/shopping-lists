@@ -48,7 +48,8 @@ export default function HomePage() {
   // Text that existed before recording started — kept separate so we can
   // rebuild "baseText + sessionTranscript" on every interim event without duplication
   const baseTextRef = useRef('');
-  const sessionFinalRef = useRef(''); // final words recognized in this recording session
+  const sessionFinalRef = useRef('');
+  const processedCountRef = useRef(0); // how many results we've already finalized
 
   const hasSpeechRecognition =
     typeof window !== 'undefined' &&
@@ -75,6 +76,7 @@ export default function HomePage() {
     // Save whatever was typed before recording starts
     baseTextRef.current = text;
     sessionFinalRef.current = '';
+    processedCountRef.current = 0;
 
     const recognition = new SpeechRecognitionClass();
     recognition.lang = 'he-IL';
@@ -82,21 +84,24 @@ export default function HomePage() {
     recognition.interimResults = true;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Only process new/changed results using resultIndex
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Process only results we haven't seen yet (by our own counter, not resultIndex)
+      for (let i = processedCountRef.current; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
           const word = event.results[i][0].transcript.trim();
-          sessionFinalRef.current += (sessionFinalRef.current ? ' ' : '') + word;
+          if (word) {
+            sessionFinalRef.current += (sessionFinalRef.current ? ' ' : '') + word;
+          }
+          processedCountRef.current = i + 1;
         }
       }
 
-      // Current interim: last non-final result only
+      // Interim: last non-final result (if any)
       const last = event.results[event.results.length - 1];
-      const currentInterim = !last.isFinal ? last[0].transcript : '';
+      const currentInterim = last && !last.isFinal ? last[0].transcript : '';
 
       const base = baseTextRef.current;
       const finalSoFar = sessionFinalRef.current;
-      setText(base ? base + (finalSoFar ? ' ' + finalSoFar : '') : finalSoFar);
+      setText([base, finalSoFar].filter(Boolean).join(' '));
       setInterimText(currentInterim);
     };
 
