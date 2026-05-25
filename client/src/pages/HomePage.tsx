@@ -49,7 +49,7 @@ export default function HomePage() {
   // rebuild "baseText + sessionTranscript" on every interim event without duplication
   const baseTextRef = useRef('');
   const sessionFinalRef = useRef('');
-  const processedCountRef = useRef(0); // how many results we've already finalized
+  const isRecordingRef = useRef(false); // stable ref to avoid stale closure in onend
 
   const hasSpeechRecognition =
     typeof window !== 'undefined' &&
@@ -63,7 +63,9 @@ export default function HomePage() {
   }, []);
 
   const stopRecording = useCallback(() => {
+    isRecordingRef.current = false;
     recognitionRef.current?.stop();
+    recognitionRef.current = null;
     setRecordingState('idle');
     setInterimText('');
   }, []);
@@ -73,50 +75,59 @@ export default function HomePage() {
       window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) return;
 
-    // Save whatever was typed before recording starts
     baseTextRef.current = text;
     sessionFinalRef.current = '';
-    processedCountRef.current = 0;
+    isRecordingRef.current = true;
 
-    const recognition = new SpeechRecognitionClass();
-    recognition.lang = 'he-IL';
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    function createAndStart() {
+      if (!isRecordingRef.current) return;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Process only results we haven't seen yet (by our own counter, not resultIndex)
-      for (let i = processedCountRef.current; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          const word = event.results[i][0].transcript.trim();
-          if (word) {
-            sessionFinalRef.current += (sessionFinalRef.current ? ' ' : '') + word;
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = 'he-IL';
+      recognition.continuous = false;   // one utterance at a time — no accumulation bug
+      recognition.interimResults = true;
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // With continuous=false there is always exactly one result
+        const result = event.results[0];
+        const transcript = result[0].transcript.trim();
+
+        if (result.isFinal) {
+          if (transcript) {
+            sessionFinalRef.current += (sessionFinalRef.current ? ' ' : '') + transcript;
           }
-          processedCountRef.current = i + 1;
+          const combined = [baseTextRef.current, sessionFinalRef.current]
+            .filter(Boolean)
+            .join(' ');
+          setText(combined);
+          setInterimText('');
+        } else {
+          setInterimText(transcript);
         }
-      }
+      };
 
-      // Interim: last non-final result (if any)
-      const last = event.results[event.results.length - 1];
-      const currentInterim = last && !last.isFinal ? last[0].transcript : '';
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        if (event.error === 'no-speech') {
+          // Silence — restart quietly
+          if (isRecordingRef.current) createAndStart();
+          return;
+        }
+        isRecordingRef.current = false;
+        setError('שגיאה בהקלטה: ' + event.error);
+        setRecordingState('idle');
+      };
 
-      const base = baseTextRef.current;
-      const finalSoFar = sessionFinalRef.current;
-      setText([base, finalSoFar].filter(Boolean).join(' '));
-      setInterimText(currentInterim);
-    };
+      recognition.onend = () => {
+        setInterimText('');
+        // Auto-restart so recording feels continuous
+        if (isRecordingRef.current) createAndStart();
+      };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setError('שגיאה בהקלטה: ' + event.error);
-      setRecordingState('idle');
-    };
+      recognitionRef.current = recognition;
+      recognition.start();
+    }
 
-    recognition.onend = () => {
-      setRecordingState('idle');
-      setInterimText('');
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+    createAndStart();
     setRecordingState('recording');
     setError('');
   }
