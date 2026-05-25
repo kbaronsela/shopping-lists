@@ -45,6 +45,9 @@ export default function HomePage() {
   const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Text that existed before recording started — kept separate so we can
+  // rebuild "baseText + sessionTranscript" on every interim event without duplication
+  const baseTextRef = useRef('');
 
   const hasSpeechRecognition =
     typeof window !== 'undefined' &&
@@ -68,25 +71,27 @@ export default function HomePage() {
       window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) return;
 
+    // Save whatever was typed before recording starts
+    baseTextRef.current = text;
+
     const recognition = new SpeechRecognitionClass();
     recognition.lang = 'he-IL';
     recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      let final = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Rebuild the full session transcript from scratch each time to avoid duplication
+      let sessionFinal = '';
+      let sessionInterim = '';
+      for (let i = 0; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) final += t;
-        else interim += t;
+        if (event.results[i].isFinal) sessionFinal += t;
+        else sessionInterim += t;
       }
-      if (final) {
-        setText((prev) => (prev ? prev + ' ' + final : final));
-        setInterimText('');
-      } else {
-        setInterimText(interim);
-      }
+
+      const base = baseTextRef.current;
+      setText(base ? base + ' ' + sessionFinal : sessionFinal);
+      setInterimText(sessionInterim);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
