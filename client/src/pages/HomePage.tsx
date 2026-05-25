@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
 import ItemPreviewModal from '../components/ItemPreviewModal';
-import { parseText, confirmItems } from '../api';
-import { ProcessedItem, ConfirmEntry } from '../types';
+import { confirmItems, fetchLists, ConfirmEntry } from '../api';
+import { parseShoppingText } from '../parser';
+import { ProcessedItem, List } from '../types';
 
-type RecordingState = 'idle' | 'recording' | 'processing';
+type RecordingState = 'idle' | 'recording';
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -40,6 +41,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [previewItems, setPreviewItems] = useState<ProcessedItem[] | null>(null);
+  const [lists, setLists] = useState<List[]>([]);
   const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -50,6 +52,9 @@ export default function HomePage() {
 
   useEffect(() => {
     textareaRef.current?.focus();
+    fetchLists()
+      .then(setLists)
+      .catch(() => setError('שגיאה בטעינת הרשימות'));
   }, []);
 
   const stopRecording = useCallback(() => {
@@ -105,7 +110,7 @@ export default function HomePage() {
     else startRecording();
   }
 
-  async function handleSave() {
+  function handleSave() {
     const combined = (text + (interimText ? ' ' + interimText : '')).trim();
     if (!combined) {
       setError('אנא הכנס טקסט או הקלט הודעה');
@@ -113,20 +118,32 @@ export default function HomePage() {
     }
     if (recordingState === 'recording') stopRecording();
 
-    setIsLoading(true);
-    setError('');
-    try {
-      const { items } = await parseText(combined);
-      if (items.length === 0) {
-        setError('לא זוהו פריטים לקניה. נסה לנסח מחדש.');
-        return;
-      }
-      setPreviewItems(items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'שגיאה בלתי צפויה');
-    } finally {
-      setIsLoading(false);
+    const listNames = lists.map((l) => l.name);
+    const parsed = parseShoppingText(combined, listNames);
+
+    if (parsed.length === 0) {
+      setError('לא זוהו פריטים לקניה. נסה לנסח מחדש.');
+      return;
     }
+
+    const processedItems: ProcessedItem[] = parsed.map((item) => {
+      const list = lists.find(
+        (l) => l.name.toLowerCase() === item.listName.toLowerCase()
+      );
+      const existing = list?.items.find(
+        (i) => i.name.toLowerCase() === item.name.toLowerCase()
+      );
+      return {
+        ...item,
+        resolvedListId: list?.id ?? null,
+        resolvedListName: list?.name ?? item.listName,
+        isDuplicate: !!existing,
+        existingItem: existing,
+      };
+    });
+
+    setPreviewItems(processedItems);
+    setError('');
   }
 
   async function handleConfirm(entries: ConfirmEntry[]) {
@@ -146,6 +163,11 @@ export default function HomePage() {
 
       setSuccess(parts.join(', ') + ' ✓');
       setText('');
+
+      // Refresh lists to reflect new items
+      const updated = await fetchLists();
+      setLists(updated);
+
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'שגיאה בשמירה');
@@ -246,7 +268,7 @@ export default function HomePage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span>מפענח...</span>
+                  <span>שומר...</span>
                 </>
               ) : (
                 <>

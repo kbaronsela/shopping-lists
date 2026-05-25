@@ -22,10 +22,3 @@ export interface ProcessedItem {
   isDuplicate: boolean;
   existingItem?: Item;
 }
-
-export interface ConfirmEntry {
-  name: string;
-  listId: number;
-  quantity: number;
-  increaseIfDuplicate?: boolean;
-}

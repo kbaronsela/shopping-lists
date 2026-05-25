@@ -1,68 +1,123 @@
 # רשימות קניות 🛒
 
-אפליקציית PWA לניהול רשימות קניות עם פענוח טקסט חכם.
+אפליקציית PWA לניהול רשימות קניות — פרונטאנד בלבד, ללא שרת.
 
 ## טכנולוגיות
 
 - **קליינט**: React + Vite + TypeScript + TailwindCSS + PWA
-- **שרת**: Node.js + Express + TypeScript + SQLite
-- **AI**: OpenAI GPT-4o-mini לפענוח טקסט חכם
-- **Speech-to-Text**: Web Speech API (מובנה בדפדפן)
+- **מסד נתונים**: Supabase (PostgreSQL בענן, חינמי)
+- **פענוח טקסט**: מילות מפתח בעברית, ישירות בדפדפן
+- **Speech-to-Text**: Web Speech API (מובנה, תמיכה בעברית)
+
+---
 
 ## הגדרה ראשונית
 
-### 1. מפתח OpenAI
+### שלב 1 — צור פרויקט Supabase
+
+1. היכנס ל-[supabase.com](https://supabase.com) וצור חשבון חינמי
+2. צור פרויקט חדש (בחר סיסמה ואזור)
+3. המתן ~2 דקות עד שהפרויקט מוכן
+
+### שלב 2 — צור את הטבלאות
+
+ב-Supabase לך ל: **SQL Editor** → **New query** והדבק:
+
+```sql
+-- טבלת רשימות
+CREATE TABLE lists (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- טבלת פריטים
+CREATE TABLE items (
+  id BIGSERIAL PRIMARY KEY,
+  list_id BIGINT REFERENCES lists(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- הרשאות גישה ציבורית (לאפליקציה אישית)
+ALTER TABLE lists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow all" ON lists FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON items FOR ALL USING (true) WITH CHECK (true);
+
+-- רשימות ברירת מחדל
+INSERT INTO lists (name) VALUES ('סופר'), ('טמבוריה'), ('פארם'), ('מקס');
+```
+
+לחץ **Run**.
+
+### שלב 3 — העתק את פרטי ה-API
+
+ב-Supabase לך ל: **Project Settings → API**
+
+העתק:
+- **Project URL** (נראה כך: `https://xxxx.supabase.co`)
+- **anon public** key
+
+### שלב 4 — הגדר משתני סביבה
 
 ```bash
-cp server/.env.example server/.env
+cd client
+copy .env.example .env
 ```
 
-ערוך את הקובץ `server/.env` והכנס את מפתח ה-API שלך:
+ערוך את `client/.env`:
 ```
-OPENAI_API_KEY=sk-...
-PORT=3001
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### 2. התקנת תלויות
+### שלב 5 — התקנה והפעלה
 
 ```bash
-npm run install:all
+cd client
+npm install
+npm run dev
 ```
 
-### 3. הפעלה
+האפליקציה תיפתח על `http://localhost:5173/shopping-lists/`
 
-**שרת** (טרמינל 1):
-```bash
-npm run dev:server
-```
+---
 
-**קליינט** (טרמינל 2):
-```bash
-npm run dev:client
-```
+## פרסום על GitHub Pages (חינמי)
 
-הקליינט יפתח על `http://localhost:5173`
+### אוטומטי עם GitHub Actions
+
+צור את הקובץ `.github/workflows/deploy.yml` (כבר קיים בפרויקט).
+
+לאחר מכן הוסף את משתני הסביבה ב-GitHub:
+1. לך ל-Repository → **Settings → Secrets and variables → Actions**
+2. הוסף שני secrets:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+בכל `git push` לענף `main` — האפליקציה תפורסם אוטומטית!
+
+הכתובת תהיה: `https://kbaronsela.github.io/shopping-lists/`
+
+---
 
 ## שימוש
 
-### עמוד ראשי
-- **כתיבה**: הקלד מה צריך לקנות בתיבת הטקסט
-- **הקלטה**: לחץ על כפתור המיקרופון ודבר (עברית נתמכת)
-- **שמירה**: לחץ "שמור" — ה-AI יפענח ויארגן לרשימות
+### פענוח אוטומטי לפי מילות מפתח
 
-### דוגמאות לטקסט
-- "חיתולים מהפארם ומוצרלה מהסופר"
-- "צריך לקחת ממקס מדפים ומהפארם משחת שיניים"
-- "ביצים, חלב, לחם" (יכנסו אוטומטית לסופר)
+| ביטוי בטקסט | → רשימה |
+|---|---|
+| "מהפארם", "פארמסיה" | פארם |
+| "מהסופר", "שופרסל", "רמי לוי" | סופר |
+| "טמבוריה", "טמבור" | טמבוריה |
+| "מקס", "מקסטוק" | מקס |
+| ללא ציון | סופר (ברירת מחדל) |
 
-### עמוד רשימות
-- לחץ על שם הרשימה לצפייה בפריטים
-- לחץ **−/+** לשינוי כמות (− עד 0 מוחק)
-- לחץ **✕** למחיקת פריט
-- לחץ **+ רשימה חדשה** להוספת רשימה
+### דוגמאות
 
-## PWA
-
-ניתן להתקין כאפליקציה על הטלפון:
-- פתח ב-Chrome/Safari
-- לחץ "הוסף למסך הבית"
+- `"חיתולים מהפארם ומוצרלה מהסופר"` → 2 פריטים בשתי רשימות
+- `"חלב, ביצים, לחם"` → 3 פריטים ב"סופר"
+- `"ממקס מדפים ומברגים"` → 2 פריטים ב"מקס"

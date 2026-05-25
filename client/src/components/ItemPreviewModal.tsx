@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ProcessedItem, ConfirmEntry } from '../types';
+import { ProcessedItem } from '../types';
+import { ConfirmEntry } from '../api';
 
 interface Props {
   items: ProcessedItem[];
