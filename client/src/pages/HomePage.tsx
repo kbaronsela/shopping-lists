@@ -227,7 +227,7 @@ export default function HomePage() {
                 placeholder={
                   recordingState === 'recording'
                     ? '🎙 מקשיב...'
-                    : 'לדוגמה: "תביא חיתולים מהפארם, מוצרלה מהסופר ומברשת שיניים"'
+                    : 'לדוגמה: חיתולים מהפארם, ושני חלב מהסופר'
                 }
                 rows={5}
                 className={`w-full resize-none text-slate-800 text-base leading-relaxed placeholder:text-slate-300 outline-none transition-all ${
@@ -306,21 +306,6 @@ export default function HomePage() {
             </button>
           </div>
         </div>
-
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {['סופר 🛒', 'טמבוריה 🔧', 'פארם 💊', 'מקס 🏬'].map((label) => (
-            <div
-              key={label}
-              className="bg-white rounded-2xl border border-slate-100 p-3 text-center text-sm font-medium text-slate-500 shadow-sm"
-            >
-              {label}
-            </div>
-          ))}
-        </div>
-
-        <p className="text-center text-xs text-slate-400 mt-6">
-          ניתן לומר למשל: "חלב וביצים מהסופר, משחת שיניים מהפארם"
-        </p>
       </main>
 
       {previewItems && (
