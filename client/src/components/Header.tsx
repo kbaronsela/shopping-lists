@@ -39,7 +39,7 @@ export default function Header() {
             className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium px-3 py-2 rounded-xl hover:bg-indigo-50 transition-all duration-150"
           >
             {BACK_ICON}
-            <span>חזרה</span>
+            <span>מה צריך לקנות?</span>
           </button>
         )}
       </div>

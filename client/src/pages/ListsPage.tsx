@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
-import { fetchLists, deleteItem, updateItemQuantity, createList, deleteList } from '../api';
+import { fetchLists, deleteItem, updateItemQuantity, createList, deleteList, confirmItems } from '../api';
 import { List } from '../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -22,6 +22,10 @@ export default function ListsPage() {
   const [newListName, setNewListName] = useState('');
   const [showNewListInput, setShowNewListInput] = useState(false);
   const [deletingItem, setDeletingItem] = useState<number | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [addItemError, setAddItemError] = useState('');
+  const newItemInputRef = useRef<HTMLInputElement>(null);
 
   const loadLists = useCallback(async () => {
     try {
@@ -114,6 +118,38 @@ export default function ListsPage() {
   }
 
   const activeList = lists.find((l) => l.id === activeListId);
+  async function handleAddItem() {
+    if (!newItemName.trim() || !activeListId) return;
+    setIsAddingItem(true);
+    setAddItemError('');
+    try {
+      const { results } = await confirmItems([{
+        name: newItemName.trim(),
+        listId: activeListId,
+        quantity: 1,
+        increaseIfDuplicate: false,
+      }]);
+      const result = results[0];
+      if (result.action === 'skipped') {
+        setAddItemError(`"${newItemName.trim()}" כבר קיים ברשימה`);
+        return;
+      }
+      setLists((prev) =>
+        prev.map((list) =>
+          list.id === activeListId
+            ? { ...list, items: [...list.items, result.item as List['items'][number]] }
+            : list
+        )
+      );
+      setNewItemName('');
+      newItemInputRef.current?.focus();
+    } catch (err) {
+      setAddItemError(err instanceof Error ? err.message : 'שגיאה');
+    } finally {
+      setIsAddingItem(false);
+    }
+  }
+
   const totalItems = lists.reduce((sum, l) => sum + l.items.length, 0);
 
   return (
@@ -236,10 +272,9 @@ export default function ListsPage() {
                 </div>
 
                 {activeList.items.length === 0 ? (
-                  <div className="px-6 py-16 text-center">
+                  <div className="px-6 py-10 text-center">
                     <p className="text-5xl mb-4">🛍️</p>
                     <p className="text-slate-400 font-medium">אין פריטים ברשימה זו</p>
-                    <p className="text-slate-300 text-sm mt-1">חזור לעמוד הראשי כדי להוסיף</p>
                   </div>
                 ) : (
                   <ul className="divide-y divide-slate-50">
@@ -292,6 +327,31 @@ export default function ListsPage() {
                     ))}
                   </ul>
                 )}
+
+                {/* Add item input */}
+                <div className="px-4 py-3 border-t border-slate-50">
+                  {addItemError && (
+                    <p className="text-xs text-amber-600 mb-2 px-1">{addItemError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      ref={newItemInputRef}
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => { setNewItemName(e.target.value); setAddItemError(''); }}
+                      onKeyDown={(e) => e.key === 'Enter' && void handleAddItem()}
+                      placeholder="הוסף פריט..."
+                      className="flex-1 px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-300 outline-none text-slate-800 text-sm bg-slate-50"
+                    />
+                    <button
+                      onClick={() => void handleAddItem()}
+                      disabled={!newItemName.trim() || isAddingItem}
+                      className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 disabled:bg-slate-300 transition-all active:scale-95"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="text-center py-20 text-slate-400">
