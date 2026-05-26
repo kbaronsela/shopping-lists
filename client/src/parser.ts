@@ -49,11 +49,42 @@ function cleanItemName(text: string, availableLists: string[]): string {
   return result.trim().replace(/\s+/g, ' ');
 }
 
+const HEBREW_NUMBERS: Record<string, number> = {
+  'אחד': 1, 'אחת': 1,
+  'שניים': 2, 'שתיים': 2, 'שני': 2, 'שתי': 2, 'שתים': 2,
+  'שלושה': 3, 'שלוש': 3,
+  'ארבעה': 4, 'ארבע': 4,
+  'חמישה': 5, 'חמש': 5,
+  'שישה': 6, 'שש': 6,
+  'שבעה': 7, 'שבע': 7,
+  'שמונה': 8,
+  'תשעה': 9, 'תשע': 9,
+  'עשרה': 10, 'עשר': 10,
+};
+
 function parseQuantity(text: string): { quantity: number; cleaned: string } {
+  // Digit at start: "2 חלב"
   const leadingNum = text.match(/^(\d+)\s+(.+)/);
   if (leadingNum) return { quantity: parseInt(leadingNum[1]), cleaned: leadingNum[2].trim() };
+
+  // Digit with x at end: "חלב x2"
   const trailingNum = text.match(/^(.+?)\s*[x×*]\s*(\d+)$/i);
   if (trailingNum) return { quantity: parseInt(trailingNum[2]), cleaned: trailingNum[1].trim() };
+
+  // Hebrew number word at start: "שתיים חלב"
+  for (const [word, value] of Object.entries(HEBREW_NUMBERS)) {
+    const re = new RegExp(`^${word}\\s+(.+)`, 'i');
+    const match = text.match(re);
+    if (match) return { quantity: value, cleaned: match[1].trim() };
+  }
+
+  // Hebrew number word at end: "חלב שתיים"
+  for (const [word, value] of Object.entries(HEBREW_NUMBERS)) {
+    const re = new RegExp(`^(.+?)\\s+${word}$`, 'i');
+    const match = text.match(re);
+    if (match) return { quantity: value, cleaned: match[1].trim() };
+  }
+
   return { quantity: 1, cleaned: text };
 }
 
